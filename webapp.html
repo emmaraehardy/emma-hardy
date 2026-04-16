@@ -1,0 +1,504 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8"/>
+  <meta name="viewport" content="width=device-width, initial-scale=1.0"/>
+  <title>WordQuest — AI Word Game</title>
+  <link href="https://fonts.googleapis.com/css2?family=Bebas+Neue&family=Inter:wght@400;600;700&display=swap" rel="stylesheet"/>
+  <style>
+    :root {
+      --bg: #121213;
+      --tile-border: #3a3a3c;
+      --tile-empty: #121213;
+      --correct: #538d4e;
+      --present: #b59f3b;
+      --absent: #3a3a3c;
+      --text: #ffffff;
+      --subtext: #818384;
+      --key-bg: #818384;
+    }
+
+    * { box-sizing: border-box; margin: 0; padding: 0; }
+
+    body {
+      background: var(--bg);
+      color: var(--text);
+      font-family: 'Inter', sans-serif;
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      min-height: 100vh;
+    }
+
+    header {
+      width: 100%;
+      max-width: 500px;
+      border-bottom: 1px solid #3a3a3c;
+      padding: 1rem;
+      text-align: center;
+    }
+
+    header h1 {
+      font-family: 'Bebas Neue', sans-serif;
+      font-size: 2.2rem;
+      letter-spacing: 4px;
+    }
+
+    header p {
+      font-size: 0.78rem;
+      color: var(--subtext);
+      margin-top: 0.2rem;
+    }
+
+    .back-link {
+      display: block;
+      font-size: 0.75rem;
+      color: var(--subtext);
+      text-decoration: none;
+      margin-top: 0.4rem;
+    }
+    .back-link:hover { color: white; }
+
+    /* STATUS / MESSAGE */
+    #message {
+      height: 28px;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      font-size: 0.85rem;
+      font-weight: 600;
+      letter-spacing: 1px;
+      color: #fff;
+      margin: 0.5rem 0;
+    }
+
+    /* GRID */
+    #board {
+      display: grid;
+      grid-template-rows: repeat(6, 62px);
+      grid-template-columns: repeat(5, 62px);
+      gap: 5px;
+      margin: 0.5rem 0;
+    }
+
+    .tile {
+      border: 2px solid var(--tile-border);
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      font-size: 2rem;
+      font-weight: 700;
+      text-transform: uppercase;
+      user-select: none;
+      transition: background 0.3s, border-color 0.3s;
+    }
+
+    .tile.filled {
+      border-color: #565758;
+      animation: pop 0.1s ease;
+    }
+
+    .tile.correct  { background: var(--correct);  border-color: var(--correct);  }
+    .tile.present  { background: var(--present);  border-color: var(--present);  }
+    .tile.absent   { background: var(--absent);   border-color: var(--absent);   }
+
+    @keyframes pop {
+      0%   { transform: scale(1); }
+      50%  { transform: scale(1.12); }
+      100% { transform: scale(1); }
+    }
+
+    @keyframes shake {
+      0%, 100% { transform: translateX(0); }
+      20%, 60%  { transform: translateX(-4px); }
+      40%, 80%  { transform: translateX(4px); }
+    }
+
+    .shake { animation: shake 0.4s ease; }
+
+    /* KEYBOARD */
+    #keyboard {
+      display: flex;
+      flex-direction: column;
+      gap: 6px;
+      margin-top: 0.5rem;
+    }
+
+    .key-row {
+      display: flex;
+      gap: 6px;
+      justify-content: center;
+    }
+
+    .key {
+      height: 58px;
+      min-width: 43px;
+      padding: 0 6px;
+      border-radius: 4px;
+      border: none;
+      background: var(--key-bg);
+      color: white;
+      font-family: 'Inter', sans-serif;
+      font-size: 0.85rem;
+      font-weight: 700;
+      cursor: pointer;
+      text-transform: uppercase;
+      transition: background 0.2s;
+    }
+
+    .key.wide { min-width: 65px; font-size: 0.75rem; }
+    .key:hover { filter: brightness(1.2); }
+    .key.correct { background: var(--correct); }
+    .key.present { background: var(--present); }
+    .key.absent  { background: var(--absent);  }
+
+    /* CONTROLS */
+    .controls {
+      display: flex;
+      gap: 1rem;
+      margin: 1rem 0 0.5rem;
+    }
+
+    .btn-ctrl {
+      padding: 0.5rem 1.5rem;
+      border-radius: 4px;
+      border: none;
+      font-family: 'Inter', sans-serif;
+      font-weight: 700;
+      font-size: 0.85rem;
+      cursor: pointer;
+      letter-spacing: 1px;
+    }
+
+    .btn-new  { background: var(--correct); color: white; }
+    .btn-hint { background: var(--present); color: #111; }
+    .btn-ctrl:hover { filter: brightness(1.15); }
+
+    /* LOADING OVERLAY */
+    #loading {
+      display: none;
+      position: fixed;
+      inset: 0;
+      background: rgba(0,0,0,0.7);
+      align-items: center;
+      justify-content: center;
+      font-size: 1.1rem;
+      letter-spacing: 2px;
+      z-index: 50;
+    }
+
+    #loading.show { display: flex; }
+
+    .spinner {
+      width: 36px; height: 36px;
+      border: 4px solid #555;
+      border-top-color: var(--correct);
+      border-radius: 50%;
+      animation: spin 0.7s linear infinite;
+      margin-right: 1rem;
+    }
+
+    @keyframes spin { to { transform: rotate(360deg); } }
+  </style>
+</head>
+<body>
+
+<header>
+  <h1>WordQuest</h1>
+  <p>AI-powered 5-letter word game · 6 guesses</p>
+  <a class="back-link" href="scratch.html">← Back to Hiking Page</a>
+</header>
+
+<div id="message"></div>
+
+<div id="board"></div>
+
+<div class="controls">
+  <button class="btn-ctrl btn-new"  onclick="newGame()">New Word</button>
+  <button class="btn-ctrl btn-hint" onclick="getHint()">Hint 💡</button>
+</div>
+
+<div id="keyboard"></div>
+
+<div id="loading"><div class="spinner"></div> AI is thinking...</div>
+
+<script>
+// ===================== STATE =====================
+let targetWord = "";
+let currentRow = 0;
+let currentCol = 0;
+let currentGuess = [];
+let gameOver = false;
+let guessHistory = []; // {guess, result}[]
+
+const ROWS = 6;
+const COLS = 5;
+
+// ===================== BOARD =====================
+function buildBoard() {
+  const board = document.getElementById("board");
+  board.innerHTML = "";
+  for (let r = 0; r < ROWS; r++) {
+    for (let c = 0; c < COLS; c++) {
+      const tile = document.createElement("div");
+      tile.classList.add("tile");
+      tile.id = `tile-${r}-${c}`;
+      board.appendChild(tile);
+    }
+  }
+}
+
+// ===================== KEYBOARD =====================
+const ROWS_KEYS = [
+  ["Q","W","E","R","T","Y","U","I","O","P"],
+  ["A","S","D","F","G","H","J","K","L"],
+  ["ENTER","Z","X","C","V","B","N","M","⌫"]
+];
+
+function buildKeyboard() {
+  const kb = document.getElementById("keyboard");
+  kb.innerHTML = "";
+  ROWS_KEYS.forEach(row => {
+    const rowEl = document.createElement("div");
+    rowEl.classList.add("key-row");
+    row.forEach(key => {
+      const btn = document.createElement("button");
+      btn.classList.add("key");
+      if (key === "ENTER" || key === "⌫") btn.classList.add("wide");
+      btn.textContent = key;
+      btn.id = `key-${key}`;
+      btn.addEventListener("click", () => handleKey(key));
+      rowEl.appendChild(btn);
+    });
+    kb.appendChild(rowEl);
+  });
+}
+
+// ===================== INPUT =====================
+document.addEventListener("keydown", e => {
+  if (gameOver) return;
+  if (e.key === "Enter") handleKey("ENTER");
+  else if (e.key === "Backspace") handleKey("⌫");
+  else if (/^[a-zA-Z]$/.test(e.key)) handleKey(e.key.toUpperCase());
+});
+
+function handleKey(key) {
+  if (gameOver) return;
+  if (key === "⌫") {
+    if (currentCol > 0) {
+      currentCol--;
+      currentGuess.pop();
+      getTile(currentRow, currentCol).textContent = "";
+      getTile(currentRow, currentCol).classList.remove("filled");
+    }
+  } else if (key === "ENTER") {
+    if (currentCol < COLS) {
+      shakeRow(currentRow);
+      showMessage("Not enough letters", 1200);
+      return;
+    }
+    submitGuess();
+  } else {
+    if (currentCol < COLS) {
+      getTile(currentRow, currentCol).textContent = key;
+      getTile(currentRow, currentCol).classList.add("filled");
+      currentGuess.push(key);
+      currentCol++;
+    }
+  }
+}
+
+function getTile(r, c) {
+  return document.getElementById(`tile-${r}-${c}`);
+}
+
+function shakeRow(row) {
+  for (let c = 0; c < COLS; c++) {
+    const t = getTile(row, c);
+    t.classList.add("shake");
+    t.addEventListener("animationend", () => t.classList.remove("shake"), { once: true });
+  }
+}
+
+// ===================== SUBMIT GUESS =====================
+async function submitGuess() {
+  const guess = currentGuess.join("");
+  showLoading(true);
+
+  let result;
+  try {
+    result = await validateAndScore(guess, targetWord);
+  } catch(e) {
+    showLoading(false);
+    showMessage("Error — try again", 1500);
+    return;
+  }
+
+  showLoading(false);
+
+  if (!result.valid) {
+    shakeRow(currentRow);
+    showMessage(result.reason || "Not a valid word", 1500);
+    currentGuess = [];
+    currentCol = 0;
+    for (let c = 0; c < COLS; c++) {
+      getTile(currentRow, c).textContent = "";
+      getTile(currentRow, c).classList.remove("filled");
+    }
+    return;
+  }
+
+  // Color tiles
+  for (let c = 0; c < COLS; c++) {
+    const tile = getTile(currentRow, c);
+    tile.classList.add(result.colors[c]);
+    updateKey(result.letters[c], result.colors[c]);
+  }
+
+  guessHistory.push({ guess, result });
+
+  if (result.colors.every(c => c === "correct")) {
+    gameOver = true;
+    showMessage(["Genius!", "Magnificent!", "Impressive!", "Splendid!", "Great!", "Phew!"][currentRow] || "Nice!", 0);
+    return;
+  }
+
+  currentRow++;
+  currentCol = 0;
+  currentGuess = [];
+
+  if (currentRow === ROWS) {
+    gameOver = true;
+    showMessage(`The word was: ${targetWord}`, 0);
+  }
+}
+
+// ===================== CLAUDE API: VALIDATE + SCORE =====================
+async function validateAndScore(guess, target) {
+  const prompt = `You are a Wordle game engine. A player guessed the word "${guess}" and the secret word is "${target}".
+
+First, determine if "${guess}" is a real English word. Common words, proper nouns are NOT valid.
+
+Then score each letter:
+- "correct" = right letter, right position
+- "present" = right letter, wrong position  
+- "absent" = letter not in word
+
+Respond ONLY with JSON, no markdown:
+{
+  "valid": true,
+  "letters": ["G","U","E","S","S"],
+  "colors": ["absent","correct","present","absent","correct"],
+  "reason": ""
+}
+
+If not a valid word, set valid:false and fill reason. Keep letters/colors arrays even if invalid (use "absent" for all colors).`;
+
+  const response = await fetch("https://api.anthropic.com/v1/messages", {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({
+      model: "claude-sonnet-4-20250514",
+      max_tokens: 300,
+      messages: [{ role: "user", content: prompt }]
+    })
+  });
+
+  const data = await response.json();
+  const text = data.content.map(i => i.text || "").join("").replace(/```json|```/g, "").trim();
+  return JSON.parse(text);
+}
+
+// ===================== CLAUDE API: GET WORD =====================
+async function fetchNewWord() {
+  showLoading(true);
+  const prompt = `Generate a single random 5-letter common English word for a Wordle game. It should be a real, common word (not too obscure). Reply ONLY with the word in UPPERCASE, nothing else.`;
+
+  const response = await fetch("https://api.anthropic.com/v1/messages", {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({
+      model: "claude-sonnet-4-20250514",
+      max_tokens: 10,
+      messages: [{ role: "user", content: prompt }]
+    })
+  });
+
+  const data = await response.json();
+  const word = data.content.map(i => i.text || "").join("").trim().toUpperCase().replace(/[^A-Z]/g, "");
+  showLoading(false);
+  return word.slice(0, 5);
+}
+
+// ===================== CLAUDE API: HINT =====================
+async function getHint() {
+  if (gameOver || !targetWord) return;
+  showLoading(true);
+
+  const guessedWords = guessHistory.map(h => h.guess).join(", ") || "none";
+  const prompt = `I'm playing Wordle. The secret word is "${targetWord}". So far I've guessed: ${guessedWords}.
+Give me a helpful hint about the word WITHOUT revealing the word itself. One short sentence, max 12 words.`;
+
+  const response = await fetch("https://api.anthropic.com/v1/messages", {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({
+      model: "claude-sonnet-4-20250514",
+      max_tokens: 80,
+      messages: [{ role: "user", content: prompt }]
+    })
+  });
+
+  const data = await response.json();
+  const hint = data.content.map(i => i.text || "").join("").trim();
+  showLoading(false);
+  showMessage(`💡 ${hint}`, 5000);
+}
+
+// ===================== KEY COLORS =====================
+const keyColors = {};
+const COLOR_PRIORITY = { correct: 3, present: 2, absent: 1 };
+
+function updateKey(letter, color) {
+  const current = keyColors[letter];
+  if (!current || COLOR_PRIORITY[color] > COLOR_PRIORITY[current]) {
+    keyColors[letter] = color;
+    const btn = document.getElementById(`key-${letter}`);
+    if (btn) {
+      btn.classList.remove("correct", "present", "absent");
+      btn.classList.add(color);
+    }
+  }
+}
+
+// ===================== UI HELPERS =====================
+function showMessage(msg, duration) {
+  const el = document.getElementById("message");
+  el.textContent = msg;
+  if (duration > 0) setTimeout(() => { if (el.textContent === msg) el.textContent = ""; }, duration);
+}
+
+function showLoading(show) {
+  document.getElementById("loading").classList.toggle("show", show);
+}
+
+// ===================== NEW GAME =====================
+async function newGame() {
+  buildBoard();
+  buildKeyboard();
+  currentRow = 0;
+  currentCol = 0;
+  currentGuess = [];
+  gameOver = false;
+  guessHistory = [];
+  Object.keys(keyColors).forEach(k => delete keyColors[k]);
+  showMessage("Loading new word...", 0);
+  targetWord = await fetchNewWord();
+  showMessage("", 0);
+}
+
+// ===================== INIT =====================
+newGame();
+</script>
+</body>
+</html>
